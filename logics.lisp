@@ -6,19 +6,22 @@
 	    ((not) (cadr exp))
 	    ((or) `(and ,(negate (cadr exp)) ,(negate (caddr exp))))
 	    ((and) `(or ,(negate (cadr exp)) ,(negate (caddr exp))))
-	    ((implies) (negate `(or ,(negate (cadr exp)) ,(caddr exp))))
 	    (otherwise `(not ,exp)))
       `(not ,exp)))
 
 (defun wrap (exp)
   (if (listp exp) exp (list exp)))
 
+(defun unwrap (exp)
+  (if (and (and (listp exp) (not (listp (car exp)))) (not (cdr exp))) (car exp) exp))
+
 (defun imply-exp (exp)
   (if (listp exp)
       (case (car exp)
-	    ((implies) `(or ,(negate (imply-exp (cadr exp))) ,(imply-exp (caddr exp))))
-	    (otherwise (mapcar #'imply-exp exp)))
-    exp))
+	((implies) `(or ,(negate (imply-exp (cadr exp))) ,(imply-exp (caddr exp))))
+	((equivalent) (imply-exp `(and (implies ,(cadr exp) ,(caddr exp)) (implies ,(caddr exp) ,(cadr exp)))))
+	(otherwise (mapcar #'imply-exp exp)))
+      exp))
 
 (defun prop-not (exp)
   (if (listp exp)
@@ -109,3 +112,31 @@
 
 (defun cnf-clausify (exp)
   (clausify (cnf exp)))
+
+(defun combine-disjunction (dis)
+  (if dis
+      (if (find-if (lambda (x) (equal x (car dis))) (cdr dis))
+	  (combine-disjunction (cdr dis))
+	  (cons (car dis) (combine-disjunction (cdr dis))))
+      dis))
+
+(defun eliminate-disjunction (dis)
+  (if dis
+      (if (find-if (lambda (x) (equal x (negate (car dis)))) (cdr dis))
+	  t
+	  (cons (car dis) (eliminate-disjunction (cdr dis))))
+      dis))
+
+(defun simplify-disjunctions (clause)
+  (mapcar (lambda (x) (eliminate-disjunction (combine-disjunction x))) clause))
+
+(defun simplify-conjunctions (conj)
+  (if conj
+      (cond ((not (car conj)) ())
+	    ((eq (car conj) t) (simplify-conjunctions (cdr conj)))
+	    ((find-if (lambda (x) (equal (unwrap x) (negate (unwrap (car conj))))) (cdr conj)) ())
+	    (t (cons (car conj) (simplify-conjunctions (cdr conj)))))
+      conj))
+
+(defun simplify-clause (clause)
+  (simplify-conjunctions (simplify-disjunctions clause)))
