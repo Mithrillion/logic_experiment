@@ -84,7 +84,7 @@
 			(case (car expr)
 			      ((all) (progn (defparameter *label* (1+ *label*))
 					    (substitute (cadr expr)
-							(intern (concatenate 'string "W" (write-to-string *label*)))
+							(intern (concatenate 'string "$W" (write-to-string *label*)))
 							(rm-univ (caddr expr)))))
 			      (otherwise (mapcar #'rm-univ expr)))
 		      expr)))
@@ -140,3 +140,20 @@
 
 (defun simplify-clause (clause)
   (simplify-conjunctions (simplify-disjunctions clause)))
+
+(defun variablep (exp)
+  (if (listp exp) () (equal "$" (subseq (symbol-name exp) 0 1))))
+
+(defun resolvep (dis1 dis2)
+  (if dis1
+      (if (find-if (lambda (x) (equal (unwrap x) (negate (unwrap (car dis1))))) dis2) (car dis1) (resolvep (cdr dis1) dis2))
+    ()))
+
+(defun subequal (exp1 exp2)
+  (equal (unwrap exp1) (unwrap exp2)))
+
+(defun resolve (dis1 dis2)
+  (let ((rp (resolvep dis1 dis2)))
+    (if rp
+	(remove-if (lambda (x) (subequal x rp)) (remove-if (lambda (x) (subequal x (negate rp))) (append dis1 dis2)))
+      ())))
